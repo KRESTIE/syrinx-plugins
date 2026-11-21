@@ -71,7 +71,7 @@ passerait par `protocol: 2`, et l'app parlerait les deux.
 | `color` | non | couleur du plugin (`#RRGGBB`), pour son badge |
 | `resources` | oui | ce qu'il fournit (chapitre 4) |
 | `catalogs` | non | ses rangées et onglets (ressource `catalog`) |
-| `import` | non | texte du champ « ajouter depuis un lien » : `{"label": "Ajouter", "hint": "Lien d'un album Bandcamp"}` |
+| `import` | non | texte du champ « ajouter depuis un lien » : `{"label": "Ajouter", "hint": "Lien d'un album Bandcamp"}` ; `help` (facultatif) : ce qu'on peut ajouter, affiché sous le champ, `[{"title", "text"}]` |
 | `permissions` | non | ce qu'il demande à recevoir ou à faire (chapitre 5) |
 
 Le manifeste peut changer d'un appel à l'autre (une rangée qui n'apparaît qu'une fois un réglage fait, une langue
@@ -520,8 +520,9 @@ Construit sur `remote` : le plugin recale chaque invité sur l'appareil de l'hô
 
 - `GET artist/info.json?name=` → `{"state": "building"}` pendant une première recherche (l'app redemande quelques
   secondes plus tard), puis `{"state": "ready", bio, photo, popular, albums, similar}`.
-- `GET artist/rare.json?name=` → même principe, `{"state": "ready", "items": [...]}` : des titres de l'artiste
-  introuvables ailleurs, chargés à part parce que c'est lent.
+- `GET artist/rare.json?name=` → même principe, `{"state": "ready", "title", "text", "items": [...]}` : des titres
+  de l'artiste introuvables ailleurs, chargés à part parce que c'est lent ; `title` et `text` (facultatifs) : titre
+  et phrase de la section.
 
 #### `update` : mises à jour de l'app
 

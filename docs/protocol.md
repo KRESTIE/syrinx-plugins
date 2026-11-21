@@ -71,7 +71,7 @@ would speak both.
 | `color` | no | plugin color (`#RRGGBB`), for its badge |
 | `resources` | yes | what it provides (chapter 4) |
 | `catalogs` | no | its rows and tabs (`catalog` resource) |
-| `import` | no | text of the "add from a link" field: `{"label": "Add", "hint": "Link to a Bandcamp album"}` |
+| `import` | no | text of the "add from a link" field: `{"label": "Add", "hint": "Link to a Bandcamp album"}`; `help` (optional): what can be added, shown under the field, `[{"title", "text"}]` |
 | `permissions` | no | what it asks to receive or to do (chapter 5) |
 
 The manifest may change from one call to the next (a row that only appears once a setting is made, another
@@ -519,8 +519,9 @@ Built on `remote`: the plugin keeps each guest in step with the host's device (s
 
 - `GET artist/info.json?name=` → `{"state": "building"}` during a first lookup (the app asks again a few seconds
   later), then `{"state": "ready", bio, photo, popular, albums, similar}`.
-- `GET artist/rare.json?name=` → same idea, `{"state": "ready", "items": [...]}`: tracks by the artist found nowhere
-  else, loaded separately because it is slow.
+- `GET artist/rare.json?name=` → same idea, `{"state": "ready", "title", "text", "items": [...]}`: tracks by the
+  artist found nowhere else, loaded separately because it is slow; `title` and `text` (optional): heading and
+  sentence of the section.
 
 #### `update`: app updates
 
