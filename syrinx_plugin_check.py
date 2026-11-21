@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 """
-syrinx_plugin_check.py — Vérifie qu'un plugin suit le protocole Syrinx (docs/protocol.md, version 1).
+syrinx_plugin_check.py — checks that a plugin follows the Syrinx protocol (docs/protocol.md, version 1).
 
-    python3 syrinx_plugin_check.py https://exemple.org/syrinx/manifest.json
-    python3 syrinx_plugin_check.py <adresse> --lang en --json rapport.json
+    python3 syrinx_plugin_check.py https://example.org/syrinx/manifest.json
+    python3 syrinx_plugin_check.py <address> --lang fr --json report.json
 
-Ce qu'il fait, sans rien modifier chez le plugin (seulement des GET, jamais POST ni DELETE) :
-  1. lit le manifeste et vérifie ses champs ;
-  2. pour chaque ressource déclarée, fait les appels de lecture qu'une app ferait (catalogues, recherche, fiches,
-     lecture, lecture continue, paroles, stats…) en prenant ses exemples dans les réponses précédentes (le premier
-     titre d'un catalogue sert à tester stream, similar, actions…) ;
-  3. vérifie la forme de chaque réponse : champs obligatoires, types, valeurs permises ;
-  4. pour stream : le fichier audio répond-il (premiers octets, plages Range) ?
+What it does, without changing anything on the plugin (only GET requests, never POST or DELETE):
+  1. reads the manifest and checks its fields;
+  2. for each declared resource, makes the read calls an app would make (catalogs, search, pages, playback,
+     continuous play, lyrics, stats…), taking its examples from earlier answers (the first track of a catalog is
+     used to test stream, similar, actions…);
+  3. checks the shape of each answer: required fields, types, allowed values;
+  4. for stream: does the audio file answer (first bytes, Range requests)?
 
-Chaque point est rangé en OK, AVERTISSEMENT (permis mais à corriger : un champ facultatif mal formé, une ressource
-inconnue) ou ERREUR (une app ne pourrait pas s'en servir). Code de sortie : 0 sans erreur, 1 sinon.
+Each point is filed as OK, WARNING (allowed but worth fixing: a malformed optional field, an unknown resource) or
+ERROR (an app could not use it). Exit code: 0 without errors, 1 otherwise.
 
-Python 3.10 ou plus récent, rien à installer (bibliothèque standard seulement).
+Python 3.10 or newer, nothing to install (standard library only).
 """
 from __future__ import annotations
 
@@ -34,12 +34,12 @@ TYPES = {"track", "album", "artist", "playlist"}
 KNOWN = {
     # Source
     "catalog", "search", "meta", "stream", "similar", "wave",
-    # Bibliothèque
+    # Library
     "actions", "import", "jobs", "upload", "library", "suggestions",
-    # Compagnons
+    # Companions
     "lyrics", "scrobble", "stats", "wrapped", "dashboard", "milestones", "profiles", "prefs", "now", "remote", "jam",
     "tastes", "artist", "update", "voice",
-    # Réglages
+    # Settings
     "settings",
 }
 PERMISSIONS = {"plays", "devices", "voice", "files", "notifications", "update"}
@@ -51,32 +51,32 @@ FIELD_TYPES = {"text", "choice", "secret", "toggle", "number"}
 
 class Report:
     def __init__(self) -> None:
-        self.lines: list[tuple[str, str, str]] = []      # (niveau, où, message)
+        self.lines: list[tuple[str, str, str]] = []      # (level, where, message)
 
     def ok(self, where: str, msg: str) -> None:
         self.lines.append(("OK", where, msg))
 
     def warn(self, where: str, msg: str) -> None:
-        self.lines.append(("AVERTISSEMENT", where, msg))
+        self.lines.append(("WARNING", where, msg))
 
     def err(self, where: str, msg: str) -> None:
-        self.lines.append(("ERREUR", where, msg))
+        self.lines.append(("ERROR", where, msg))
 
     @property
     def errors(self) -> int:
-        return sum(1 for x in self.lines if x[0] == "ERREUR")
+        return sum(1 for x in self.lines if x[0] == "ERROR")
 
     @property
     def warnings(self) -> int:
-        return sum(1 for x in self.lines if x[0] == "AVERTISSEMENT")
+        return sum(1 for x in self.lines if x[0] == "WARNING")
 
 
 class Plugin:
-    """Appels HTTP au plugin, comme une app : adresses relatives au dossier du manifeste, en-têtes Syrinx."""
+    """HTTP calls to the plugin, like an app: addresses relative to the manifest folder, Syrinx headers."""
 
     def __init__(self, manifest_url: str, lang: str, timeout: float) -> None:
         if not manifest_url.endswith("manifest.json"):
-            raise SystemExit("L'adresse doit se terminer par manifest.json")
+            raise SystemExit("The address must end with manifest.json")
         self.manifest_url = manifest_url
         self.base = manifest_url[: -len("manifest.json")]
         self.lang = lang
@@ -97,11 +97,11 @@ class Plugin:
             return e.code, dict(e.headers or {}), e.read(200_000), time.monotonic() - start
 
     def get_json(self, rep: Report, where: str, path: str, *, allow: tuple[int, ...] = ()) -> object | None:
-        """GET et JSON ; rien (None) si l'appel échoue (l'erreur est déjà notée)."""
+        """GET and JSON; None if the call fails (the error is already reported)."""
         try:
             status, headers, body, took = self.request(path)
-        except Exception as e:                   # réseau, délai dépassé, adresse illisible
-            rep.err(where, f"appel impossible : {e}")
+        except Exception as e:                   # network, timeout, unreadable address
+            rep.err(where, f"call failed: {e}")
             return None
         if status in allow:
             return None
@@ -112,51 +112,51 @@ class Plugin:
             except Exception:
                 pass
             if status == 503:
-                rep.warn(where, f"503 (pas prêt) {msg}".strip())
+                rep.warn(where, f"503 (not ready) {msg}".strip())
             else:
                 rep.err(where, f"HTTP {status} {msg}".strip())
             return None
         ctype = headers.get("Content-Type", headers.get("content-type", ""))
         if "json" not in ctype:
-            rep.warn(where, f"Content-Type « {ctype} » au lieu de application/json")
+            rep.warn(where, f"Content-Type \"{ctype}\" instead of application/json")
         try:
             data = json.loads(body.decode("utf-8"))
         except Exception as e:
-            rep.err(where, f"réponse qui n'est pas du JSON UTF-8 : {e}")
+            rep.err(where, f"answer is not UTF-8 JSON: {e}")
             return None
         if took > 5:
-            rep.warn(where, f"réponse lente ({took:.1f} s) : l'app attend sans rien afficher")
+            rep.warn(where, f"slow answer ({took:.1f} s): the app waits with nothing on screen")
         return data
 
 
-# ===================================================================== formes
+# ===================================================================== shapes
 
 def check_item(rep: Report, where: str, it: object) -> bool:
     if not isinstance(it, dict):
-        rep.err(where, "un élément n'est pas un objet")
+        rep.err(where, "an item is not an object")
         return False
     good = True
     for k in ("id", "type", "title"):
         if not isinstance(it.get(k), str) or not it.get(k):
-            rep.err(where, f"élément sans « {k} » (texte obligatoire) : {json.dumps(it)[:120]}")
+            rep.err(where, f"item without \"{k}\" (required text): {json.dumps(it)[:120]}")
             good = False
     if it.get("type") not in TYPES:
-        rep.err(where, f"type « {it.get('type')} » inconnu (track, album, artist, playlist)")
+        rep.err(where, f"unknown type \"{it.get('type')}\" (track, album, artist, playlist)")
         good = False
     texts = ("subtitle", "artist", "album", "albumId", "artistId", "artwork", "badge", "notice", "key", "genre",
              "format", "banner", "description", "libraryId", "onlineId")
     for k in texts:
         if k in it and it[k] is not None and not isinstance(it[k], str):
-            rep.warn(where, f"« {k} » devrait être du texte (élément {it.get('id')})")
+            rep.warn(where, f"\"{k}\" should be text (item {it.get('id')})")
     for k in ("duration", "year", "tempo", "bpm", "mixIn", "mixOut", "energy", "songCount", "owned"):
         if k in it and it[k] is not None and not isinstance(it[k], (int, float)):
-            rep.warn(where, f"« {k} » devrait être un nombre (élément {it.get('id')})")
+            rep.warn(where, f"\"{k}\" should be a number (item {it.get('id')})")
     for k in ("playable", "favorite", "live", "explicit"):
         if k in it and not isinstance(it[k], bool):
-            rep.warn(where, f"« {k} » devrait être true ou false (élément {it.get('id')})")
+            rep.warn(where, f"\"{k}\" should be true or false (item {it.get('id')})")
     src = it.get("source")
     if src is not None and (not isinstance(src, dict) or not src.get("name") or not src.get("url")):
-        rep.warn(where, "« source » doit avoir au moins name et url (crédit de licence)")
+        rep.warn(where, "\"source\" needs at least name and url (license credit)")
     if "keep" in it and it["keep"] is not None:
         check_action(rep, where + " (keep)", it["keep"])
     return good
@@ -164,93 +164,93 @@ def check_item(rep: Report, where: str, it: object) -> bool:
 
 def check_items(rep: Report, where: str, items: object, *, empty_ok: bool = True) -> list[dict]:
     if not isinstance(items, list):
-        rep.err(where, "« items » doit être une liste")
+        rep.err(where, "\"items\" must be a list")
         return []
     if not items and not empty_ok:
-        rep.warn(where, "liste vide")
+        rep.warn(where, "empty list")
     good = [it for it in items if check_item(rep, where, it)]
     ids = [it["id"] for it in good]
     if len(ids) != len(set(ids)):
-        rep.warn(where, "le même identifiant revient plusieurs fois dans la liste")
+        rep.warn(where, "the same id appears several times in the list")
     return good
 
 
 def check_fields(rep: Report, where: str, fields: object) -> None:
     if not isinstance(fields, list):
-        rep.err(where, "« fields » doit être une liste")
+        rep.err(where, "\"fields\" must be a list")
         return
     for f in fields:
         if not isinstance(f, dict) or not f.get("key") or not f.get("label"):
-            rep.err(where, "un champ sans key ou label")
+            rep.err(where, "a field without key or label")
             continue
         if f.get("type", "text") not in FIELD_TYPES:
-            rep.warn(where, f"type de champ « {f.get('type')} » inconnu ({', '.join(sorted(FIELD_TYPES))})")
+            rep.warn(where, f"unknown field type \"{f.get('type')}\" ({', '.join(sorted(FIELD_TYPES))})")
         if f.get("type") == "choice" and not isinstance(f.get("options"), list):
-            rep.err(where, f"champ « {f['key']} » : un choix sans « options »")
+            rep.err(where, f"field \"{f['key']}\": a choice without \"options\"")
 
 
 def check_action(rep: Report, where: str, a: object) -> None:
     if not isinstance(a, dict) or not a.get("id") or not isinstance(a.get("label"), str):
-        rep.err(where, "action sans id ou label")
+        rep.err(where, "action without id or label")
         return
     if a.get("style") not in (None, "danger"):
-        rep.warn(where, f"action « {a['id']} » : style « {a['style']} » inconnu (seulement danger)")
+        rep.warn(where, f"action \"{a['id']}\": unknown style \"{a['style']}\" (only danger)")
     if "fields" in a:
         check_fields(rep, where + f" ({a['id']})", a["fields"])
 
 
-# ===================================================================== manifeste
+# ===================================================================== manifest
 
 def check_manifest(rep: Report, m: object) -> dict | None:
     w = "manifest.json"
     if not isinstance(m, dict):
-        rep.err(w, "le manifeste n'est pas un objet JSON")
+        rep.err(w, "the manifest is not a JSON object")
         return None
     if m.get("protocol") != PROTOCOL:
-        rep.err(w, f"protocol vaut {m.get('protocol')!r} au lieu de {PROTOCOL}")
+        rep.err(w, f"protocol is {m.get('protocol')!r} instead of {PROTOCOL}")
     for k in ("id", "name", "version"):
         if not isinstance(m.get(k), str) or not m.get(k):
-            rep.err(w, f"« {k} » manquant (texte obligatoire)")
+            rep.err(w, f"\"{k}\" missing (required text)")
     if isinstance(m.get("id"), str) and not re.fullmatch(r"[a-z0-9-]+(\.[a-z0-9-]+)+", m["id"]):
-        rep.warn(w, f"id « {m['id']} » : un nom de domaine à l'envers est conseillé (org.exemple.radios)")
+        rep.warn(w, f"id \"{m['id']}\": a reversed domain name is recommended (org.example.radios)")
     if "color" in m and not re.fullmatch(r"#[0-9A-Fa-f]{6}", str(m["color"])):
-        rep.warn(w, "color doit être #RRGGBB")
+        rep.warn(w, "color must be #RRGGBB")
     res = m.get("resources")
     if not isinstance(res, list) or not all(isinstance(x, str) for x in res):
-        rep.err(w, "« resources » doit être une liste de textes")
+        rep.err(w, "\"resources\" must be a list of strings")
         res = []
     for r in res:
         if r not in KNOWN:
-            rep.warn(w, f"ressource « {r} » inconnue du protocole {PROTOCOL} : l'app l'ignorera")
+            rep.warn(w, f"resource \"{r}\" unknown in protocol {PROTOCOL}: the app will ignore it")
     perms = m.get("permissions", [])
     if not isinstance(perms, list):
-        rep.err(w, "« permissions » doit être une liste")
+        rep.err(w, "\"permissions\" must be a list")
         perms = []
     for p in perms:
         if p not in PERMISSIONS:
-            rep.warn(w, f"permission « {p} » inconnue")
+            rep.warn(w, f"unknown permission \"{p}\"")
     for r, p in NEEDS.items():
         if r in res and p not in perms:
-            rep.warn(w, f"« {r} » sans la permission « {p} » : l'app ne l'appellera pas")
+            rep.warn(w, f"\"{r}\" without the \"{p}\" permission: the app will not call it")
     cats = m.get("catalogs", [])
     if "catalog" in res and not cats:
-        rep.warn(w, "ressource catalog déclarée, mais aucun catalogue")
+        rep.warn(w, "catalog resource declared, but no catalogs")
     for c in cats if isinstance(cats, list) else []:
         if not isinstance(c, dict) or not c.get("id") or not c.get("name"):
-            rep.err(w, "un catalogue sans id ou name")
+            rep.err(w, "a catalog without id or name")
             continue
         if c.get("type") not in TYPES:
-            rep.err(w, f"catalogue « {c['id']} » : type « {c.get('type')} » inconnu")
+            rep.err(w, f"catalog \"{c['id']}\": unknown type \"{c.get('type')}\"")
         if c.get("section") not in ("home", "library"):
-            rep.err(w, f"catalogue « {c['id']} » : section doit être home ou library")
+            rep.err(w, f"catalog \"{c['id']}\": section must be home or library")
     imp = m.get("import")
     if "import" in res and not (isinstance(imp, dict) and imp.get("label")):
-        rep.warn(w, "ressource import sans « import »: {label, hint} dans le manifeste")
-    rep.ok(w, f"{m.get('name')} {m.get('version')} ({m.get('id')}), {len(res)} ressources")
+        rep.warn(w, "import resource without \"import\": {label, hint} in the manifest")
+    rep.ok(w, f"{m.get('name')} {m.get('version')} ({m.get('id')}), {len(res)} resources")
     return m
 
 
-# ===================================================================== ressources
+# ===================================================================== resources
 
 def run(p: Plugin, rep: Report, search_q: str) -> None:
     m = p.get_json(rep, "manifest.json", "manifest.json")
@@ -265,7 +265,7 @@ def run(p: Plugin, rep: Report, search_q: str) -> None:
         for it in items:
             seen[it["type"]].append(it)
 
-    # ---- catalogues
+    # ---- catalogs
     if "catalog" in has:
         for c in m.get("catalogs") or []:
             w = f"catalog/{c.get('id')}"
@@ -274,25 +274,25 @@ def run(p: Plugin, rep: Report, search_q: str) -> None:
                 items = check_items(rep, w, d.get("items"))
                 bad = [it for it in items if it["type"] != c.get("type")]
                 if bad:
-                    rep.warn(w, f"{len(bad)} élément(s) d'un autre type que celui du catalogue ({c.get('type')})")
+                    rep.warn(w, f"{len(bad)} item(s) of another type than the catalog's ({c.get('type')})")
                 if len(items) > 10:
-                    rep.warn(w, "plus d'éléments que limit=10")
+                    rep.warn(w, "more items than limit=10")
                 collect(items)
-                rep.ok(w, f"{len(items)} élément(s)")
+                rep.ok(w, f"{len(items)} item(s)")
 
-    # ---- recherche
+    # ---- search
     if "search" in has:
         d = p.get_json(rep, "search", f"search.json?q={q(search_q)}")
         if isinstance(d, dict):
             secs = d.get("sections")
             if not isinstance(secs, list):
-                rep.err("search", "« sections » doit être une liste")
+                rep.err("search", "\"sections\" must be a list")
                 secs = []
             n = 0
             for s in secs:
                 w = f"search ({s.get('id') if isinstance(s, dict) else '?'})"
                 if not isinstance(s, dict) or not s.get("title"):
-                    rep.err(w, "section sans title")
+                    rep.err(w, "section without title")
                     continue
                 if "items" in s:
                     items = check_items(rep, w, s["items"])
@@ -300,22 +300,22 @@ def run(p: Plugin, rep: Report, search_q: str) -> None:
                     dd = p.get_json(rep, w + " load", s["load"])
                     items = check_items(rep, w + " load", dd.get("items")) if isinstance(dd, dict) else []
                     if isinstance(dd, dict) and "errors" in dd and not isinstance(dd["errors"], list):
-                        rep.warn(w, "« errors » doit être une liste de textes")
+                        rep.warn(w, "\"errors\" must be a list of strings")
                 else:
-                    rep.err(w, "section sans items ni load")
+                    rep.err(w, "section with neither items nor load")
                     items = []
                 collect(items)
                 n += len(items)
-            rep.ok("search", f"{len(secs)} section(s), {n} élément(s) pour « {search_q} »")
-            empty = p.get_json(rep, "search (vide)", "search.json?q=")
+            rep.ok("search", f"{len(secs)} section(s), {n} item(s) for \"{search_q}\"")
+            empty = p.get_json(rep, "search (empty)", "search.json?q=")
             if isinstance(empty, dict) and empty.get("sections"):
-                rep.warn("search (vide)", "q vide devrait donner {\"sections\": []}")
+                rep.warn("search (empty)", "empty q should give {\"sections\": []}")
 
     track = next(iter(seen["track"]), None)
     if not track and any(seen.values()):
-        rep.warn("exemples", "aucun titre trouvé dans les catalogues ni la recherche : stream et similar non testés")
+        rep.warn("examples", "no track found in catalogs or search: stream and similar not tested")
 
-    # ---- fiches
+    # ---- pages
     if "meta" in has:
         for t in ("album", "artist", "playlist", "track"):
             it = next(iter(seen[t]), None)
@@ -332,17 +332,17 @@ def run(p: Plugin, rep: Report, search_q: str) -> None:
                     collect(check_items(rep, f"{w} {k}", d[k]))
             rel = d.get("related")
             if rel is not None and not (isinstance(rel, dict) and isinstance(rel.get("items"), list)):
-                rep.warn(w, "« related » doit être {title, items}")
+                rep.warn(w, "\"related\" must be {title, items}")
             facts = d.get("facts")
             if facts is not None and not all(isinstance(f, dict) and "label" in f and "value" in f for f in facts):
-                rep.warn(w, "« facts » doit être une liste de {label, value}")
-            rep.ok(w, f"« {d['item'].get('title')} »")
-        status, *_ = p.request("meta/track/syrinx-check-introuvable.json")
+                rep.warn(w, "\"facts\" must be a list of {label, value}")
+            rep.ok(w, f"\"{d['item'].get('title')}\"")
+        status, *_ = p.request("meta/track/syrinx-check-not-found.json")
         if status != 404:
-            rep.warn("meta (introuvable)", f"un identifiant inconnu devrait donner 404, pas {status}")
+            rep.warn("meta (not found)", f"an unknown id should give 404, not {status}")
         track = next(iter(seen["track"]), track)
 
-    # ---- lecture
+    # ---- playback
     if "stream" in has and track:
         live = bool(track.get("live"))
         for quality in ("raw", "opus128") if not live else ("raw",):
@@ -351,41 +351,41 @@ def run(p: Plugin, rep: Report, search_q: str) -> None:
             if not isinstance(d, dict):
                 continue
             if not isinstance(d.get("url"), str) or not d["url"]:
-                rep.err(w, "pas d'« url »")
+                rep.err(w, "no \"url\"")
                 continue
             if not d.get("live") and not d.get("cacheKey"):
-                rep.warn(w, "pas de « cacheKey » : l'app ne pourra pas garder ce titre en cache")
+                rep.warn(w, "no \"cacheKey\": the app cannot keep this track in its cache")
             try:
                 status, headers, body, _ = p.request(d["url"], {"Range": "bytes=0-4095"})
                 ctype = headers.get("Content-Type", headers.get("content-type", ""))
                 if status >= 400 and d.get("live") and status in (502, 503, 504):
-                    rep.warn(w, f"flux en direct injoignable pour l'instant (HTTP {status}) : la source est peut-être hors ligne")
+                    rep.warn(w, f"live stream unreachable for now (HTTP {status}): the source may be offline")
                 elif status >= 400:
-                    rep.err(w, f"l'adresse audio répond HTTP {status}")
+                    rep.err(w, f"the audio address answers HTTP {status}")
                 elif not body:
-                    rep.err(w, "l'adresse audio ne renvoie rien")
+                    rep.err(w, "the audio address returns nothing")
                 else:
                     if not d.get("live") and status != 206:
-                        rep.warn(w, "pas de plages Range (206) : avancer dans le titre sera lent")
+                        rep.warn(w, "no Range requests (206): seeking in the track will be slow")
                     if ctype and not (ctype.startswith("audio/") or ctype in ("application/ogg",
                                                                            "application/octet-stream")):
-                        rep.warn(w, f"Content-Type « {ctype} » inattendu pour de l'audio")
-                    rep.ok(w, f"audio joignable ({ctype or 'type inconnu'}, {len(body)} octets lus)")
+                        rep.warn(w, f"unexpected Content-Type \"{ctype}\" for audio")
+                    rep.ok(w, f"audio reachable ({ctype or 'unknown type'}, {len(body)} bytes read)")
             except Exception as e:
-                rep.err(w, f"adresse audio injoignable : {e}")
+                rep.err(w, f"audio address unreachable: {e}")
 
-    # ---- lecture continue
+    # ---- continuous play
     if "similar" in has:
         for seed in ([track["id"]] if track else []) + ["random"]:
-            w = f"similar ({'random' if seed == 'random' else 'titre'})"
+            w = f"similar ({'random' if seed == 'random' else 'track'})"
             d = p.get_json(rep, w, f"similar/{q(seed, safe='')}.json?limit=5&exclude={q(seed)}&discover=1")
             if isinstance(d, dict):
                 items = check_items(rep, w, d.get("items"))
                 if any(it["type"] != "track" for it in items):
-                    rep.err(w, "la lecture continue ne doit renvoyer que des titres")
+                    rep.err(w, "continuous play must return tracks only")
                 if any(it["id"] == seed for it in items):
-                    rep.warn(w, "renvoie un identifiant de « exclude »")
-                rep.ok(w, f"{len(items)} titre(s)")
+                    rep.warn(w, "returns an id from \"exclude\"")
+                rep.ok(w, f"{len(items)} track(s)")
 
     if "wave" in has:
         d = p.get_json(rep, "wave", "wave.json")
@@ -393,11 +393,11 @@ def run(p: Plugin, rep: Report, search_q: str) -> None:
             moods = d.get("moods")
             if not isinstance(moods, list) or not all(isinstance(x, dict) and x.get("id") and x.get("name")
                                                       for x in moods):
-                rep.err("wave", "« moods » doit être une liste de {id, name, …}")
+                rep.err("wave", "\"moods\" must be a list of {id, name, …}")
             else:
-                rep.ok("wave", f"{len(moods)} humeur(s)")
+                rep.ok("wave", f"{len(moods)} mood(s)")
 
-    # ---- bibliothèque
+    # ---- library
     if "actions" in has:
         for t in ("track", "album", "playlist"):
             it = next(iter(seen[t]), None)
@@ -408,7 +408,7 @@ def run(p: Plugin, rep: Report, search_q: str) -> None:
             if isinstance(d, dict):
                 acts = d.get("actions")
                 if not isinstance(acts, list):
-                    rep.err(w, "« actions » doit être une liste")
+                    rep.err(w, "\"actions\" must be a list")
                     continue
                 for a in acts:
                     check_action(rep, w, a)
@@ -427,15 +427,15 @@ def run(p: Plugin, rep: Report, search_q: str) -> None:
         d = p.get_json(rep, r, path)
         if not isinstance(d, dict):
             if d is not None:
-                rep.err(r, "la réponse doit être un objet")
+                rep.err(r, "the answer must be an object")
             continue
         if key and key not in d:
-            rep.err(r, f"« {key} » manquant")
+            rep.err(r, f"\"{key}\" missing")
             continue
         if r == "jobs":
             for j in d["items"]:
                 if not isinstance(j, dict) or not {"id", "label", "done", "total", "finished"} <= set(j):
-                    rep.err(r, "une tâche sans id, label, done, total ou finished")
+                    rep.err(r, "a job without id, label, done, total or finished")
         if r == "stats":
             for s in d.get("sections") or []:
                 check_items(rep, f"stats ({s.get('id') or s.get('title')})", s.get("items", []))
@@ -443,14 +443,14 @@ def run(p: Plugin, rep: Report, search_q: str) -> None:
             for g in d["groups"]:
                 gw = f"settings ({g.get('id') if isinstance(g, dict) else '?'})"
                 if not isinstance(g, dict) or not g.get("id") or not g.get("title") or not isinstance(g.get("steps"), list):
-                    rep.err(gw, "un groupe sans id, title ou steps")
+                    rep.err(gw, "a group without id, title or steps")
                     continue
                 for st in g["steps"]:
                     if "fields" in st:
                         check_fields(rep, gw, st["fields"])
         if r == "update" and d.get("version") is not None and not isinstance(d.get("code"), int):
-            rep.err(r, "« code » (nombre entier) manquant")
-        rep.ok(r, "forme correcte")
+            rep.err(r, "\"code\" (integer) missing")
+        rep.ok(r, "shape OK")
 
     if "lyrics" in has and track:
         path = (f"lyrics.json?title={q(track['title'])}&artist={q(track.get('artist') or '')}"
@@ -459,42 +459,42 @@ def run(p: Plugin, rep: Report, search_q: str) -> None:
         if isinstance(d, dict):
             lines = d.get("lines")
             if not isinstance(lines, list) or not isinstance(d.get("synced"), bool):
-                rep.err("lyrics", "il faut « synced » (true/false) et « lines » (liste)")
+                rep.err("lyrics", "needs \"synced\" (true/false) and \"lines\" (list)")
             elif not all(isinstance(x, dict) and "text" in x and "t" in x for x in lines):
-                rep.err("lyrics", "chaque ligne doit être {t, text}")
+                rep.err("lyrics", "each line must be {t, text}")
             else:
-                rep.ok("lyrics", f"{len(lines)} ligne(s) pour « {track['title']} »")
+                rep.ok("lyrics", f"{len(lines)} line(s) for \"{track['title']}\"")
 
     if "artist" in has and seen["artist"]:
         name = seen["artist"][0]["title"]
         d = p.get_json(rep, "artist", f"artist/info.json?name={q(name)}")
         if isinstance(d, dict) and d.get("state") not in ("building", "ready"):
-            rep.err("artist", "« state » doit valoir building ou ready")
+            rep.err("artist", "\"state\" must be building or ready")
         elif isinstance(d, dict):
-            rep.ok("artist", f"{name} : {d.get('state')}")
+            rep.ok("artist", f"{name}: {d.get('state')}")
 
     if "suggestions" in has and track:
         d = p.get_json(rep, "suggestions", f"suggestion.json?id={q(track['id'])}")
         if isinstance(d, dict) and "item" in d:
             if d["item"] is not None:
                 check_item(rep, "suggestions", d["item"])
-            rep.ok("suggestions", "forme correcte")
+            rep.ok("suggestions", "shape OK")
         elif isinstance(d, dict):
-            rep.err("suggestions", "« item » manquant (null s'il n'y a rien)")
+            rep.err("suggestions", "\"item\" missing (null when there is nothing)")
 
     for r in ("scrobble", "voice", "upload", "import"):
         if r in has:
-            rep.ok(r, "déclarée (écriture : non testée ici, l'outil ne modifie rien chez le plugin)")
+            rep.ok(r, "declared (writes are not tested: this tool changes nothing on the plugin)")
 
 
 def main() -> int:
-    ap = argparse.ArgumentParser(description="Vérifie qu'un plugin suit le protocole Syrinx.")
-    ap.add_argument("url", help="adresse du manifeste (…/manifest.json)")
-    ap.add_argument("--lang", default="fr", help="langue demandée (fr, en)")
-    ap.add_argument("--search", default="a", help="texte cherché pour tester la recherche (par défaut : a)")
-    ap.add_argument("--timeout", type=float, default=30, help="délai par appel, en secondes")
-    ap.add_argument("--json", help="écrire aussi le rapport dans ce fichier JSON")
-    ap.add_argument("--quiet", action="store_true", help="n'afficher que les avertissements et les erreurs")
+    ap = argparse.ArgumentParser(description="Checks that a plugin follows the Syrinx protocol.")
+    ap.add_argument("url", help="address of the manifest (…/manifest.json)")
+    ap.add_argument("--lang", default="en", help="language asked from the plugin (en, fr)")
+    ap.add_argument("--search", default="a", help="text searched to test search (default: a)")
+    ap.add_argument("--timeout", type=float, default=30, help="timeout per call, in seconds")
+    ap.add_argument("--json", help="also write the report to this JSON file")
+    ap.add_argument("--quiet", action="store_true", help="show only warnings and errors")
     a = ap.parse_args()
 
     rep = Report()
@@ -503,8 +503,8 @@ def main() -> int:
     for level, where, msg in rep.lines:
         if a.quiet and level == "OK":
             continue
-        print(f"{level:<14} {where:<{width}}  {msg}")
-    print(f"\n{rep.errors} erreur(s), {rep.warnings} avertissement(s)")
+        print(f"{level:<8} {where:<{width}}  {msg}")
+    print(f"\n{rep.errors} error(s), {rep.warnings} warning(s)")
     if a.json:
         with open(a.json, "w", encoding="utf-8") as f:
             json.dump([{"level": l, "where": w, "message": m} for l, w, m in rep.lines], f, ensure_ascii=False, indent=1)
