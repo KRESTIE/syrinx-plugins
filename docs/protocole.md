@@ -71,7 +71,7 @@ passerait par `protocol: 2`, et l'app parlerait les deux.
 | `color` | non | couleur du plugin (`#RRGGBB`), pour son badge |
 | `resources` | oui | ce qu'il fournit (chapitre 4) |
 | `catalogs` | non | ses rangées et onglets (ressource `catalog`) |
-| `import` | non | texte du champ « ajouter depuis un lien » : `{"label": "Ajouter", "hint": "Lien d'un album Bandcamp"}` ; `help` (facultatif) : ce qu'on peut ajouter, affiché sous le champ, `[{"title", "text"}]` |
+| `import` | non | texte du champ « ajouter depuis un lien » : `{"label": "Ajouter", "hint": "Lien d'un album Bandcamp"}` ; `help` (facultatif) : ce qu'on peut ajouter, affiché sous le champ, `[{"title", "text"}]` ; `sources` (facultatif) : noms des services acceptés, affichés en pastilles ; `voice` (facultatif) : services qu'on peut nommer à la voix (« mets X sur … »), `[{"id", "names": [...]}]`, renvoyé comme `source` à `search` |
 | `permissions` | non | ce qu'il demande à recevoir ou à faire (chapitre 5) |
 
 Le manifeste peut changer d'un appel à l'autre (une rangée qui n'apparaît qu'une fois un réglage fait, une langue
@@ -530,6 +530,13 @@ Pour un plugin qui distribue lui-même l'app Android (amis sans accès au magasi
 
 `GET update.json` → `{"version": "3.0.4", "code": 141, "size": 41234567, "notes": "…", "url": "update/syrinx.apk"}`
 ou `{"version": null}`. L'app propose la mise à jour si `code` est plus grand que le sien. **Permission** : `update`.
+
+#### `licence` : Syrinx Premium (serveur Syrinx officiel seulement)
+
+`GET licence.json` → `{"premium": true, "licence": {"number", "date"} | null, "price", "buy"}`. Premium s'achète
+une fois par serveur (la maison) et débloque des fonctions de l'app (plus de profils, palettes, danses, voix).
+L'app le lit chez le premier plugin actif qui le fournit ; les autres plugins n'ont jamais besoin de cette
+ressource.
 
 #### `voice` : commandes vocales
 

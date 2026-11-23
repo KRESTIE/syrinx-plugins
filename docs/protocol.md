@@ -71,7 +71,7 @@ would speak both.
 | `color` | no | plugin color (`#RRGGBB`), for its badge |
 | `resources` | yes | what it provides (chapter 4) |
 | `catalogs` | no | its rows and tabs (`catalog` resource) |
-| `import` | no | text of the "add from a link" field: `{"label": "Add", "hint": "Link to a Bandcamp album"}`; `help` (optional): what can be added, shown under the field, `[{"title", "text"}]` |
+| `import` | no | text of the "add from a link" field: `{"label": "Add", "hint": "Link to a Bandcamp album"}`; `help` (optional): what can be added, shown under the field, `[{"title", "text"}]`; `sources` (optional): names of the services accepted, shown as chips; `voice` (optional): services the user can name by voice ("play X on …"), `[{"id", "names": [...]}]`, passed back as `source` to `search` |
 | `permissions` | no | what it asks to receive or to do (chapter 5) |
 
 The manifest may change from one call to the next (a row that only appears once a setting is made, another
@@ -384,7 +384,7 @@ Link refused: `400` with `{"error": "This link is not supported"}`.
 
 ### 4.9 `upload`: send your own files
 
-For a plugin that stores music (a NAS, a server): the user sends their purchases or ripped CDs from their phone or
+For a plugin that stores music (a NAS, a server): the user sends their purchases or their own digitised CDs from their phone or
 their browser.
 
 - `POST upload`: one file per request, the body is the file, its name in the `X-Filename` header. Audio (MP3, FLAC,
@@ -529,6 +529,12 @@ For a plugin that distributes the Android app itself (friends without access to 
 
 `GET update.json` → `{"version": "3.0.4", "code": 141, "size": 41234567, "notes": "…", "url": "update/syrinx.apk"}`
 or `{"version": null}`. The app offers the update if `code` is higher than its own. **Permission**: `update`.
+
+#### `licence`: Syrinx Premium (official Syrinx server only)
+
+`GET licence.json` → `{"premium": true, "licence": {"number", "date"} | null, "price", "buy"}`. Premium is bought
+once per server (household) and unlocks app features (more profiles, palettes, dances, voice). The app reads it
+from the first active plugin that provides it; other plugins never need this resource.
 
 #### `voice`: voice commands
 
